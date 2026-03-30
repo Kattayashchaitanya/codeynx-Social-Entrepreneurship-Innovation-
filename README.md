@@ -34,8 +34,8 @@ Mind Spring is an **interactive platform** designed to help users learn social e
 ---
 
 ## Tech Stack
-- **Frontend:** React, HTML, Tailwind CSS, JavaScript  
-- **Backend:** Node.js, Express, Firebase, Google Gemini 2.5 Flash API  
+- **Frontend:** HTML, CSS, JavaScript  
+- **Backend:** Node.js  
 
 ---
 

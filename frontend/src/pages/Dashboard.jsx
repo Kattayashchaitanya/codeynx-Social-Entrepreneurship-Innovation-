@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Play, TrendingUp, Award, User, Clock, ChevronRight, Loader2 } from 'lucide-react';
+import { Play, TrendingUp, Award, User, Clock, ChevronRight, Loader2, RotateCcw } from 'lucide-react';
 import { auth, db } from '../firebase/config';
-import { collection, query, where, getDocs, orderBy, getCountFromServer } from 'firebase/firestore';
+import { collection, query, where, getDocs, getCountFromServer } from 'firebase/firestore';
+import { useSimulation } from '../context/SimulationContext';
 
 const Dashboard = () => {
   const navigate = useNavigate();
+  const { replaySimulation } = useSimulation();
   const [loading, setLoading] = useState(true);
   const [selectedRun, setSelectedRun] = useState(null);
   
@@ -65,7 +67,7 @@ const Dashboard = () => {
           ...prev,
           totalImpact: impactSum,
           highestRank: rank,
-          recentRuns: runsData.slice(0, 3)
+          recentRuns: runsData.slice(0, 10)   // show last 10 runs
         }));
       } catch (err) {
         console.error("Dashboard Sync Error:", err);
@@ -287,6 +289,19 @@ const Dashboard = () => {
             >
               Close Record
             </button>
+
+            {/* ▶ Replay Button — only visible if full scenario was saved */}
+            {selectedRun.scenarioSnapshot && (
+              <button
+                onClick={() => {
+                  setSelectedRun(null);
+                  replaySimulation(selectedRun.scenarioSnapshot, selectedRun.initialBudget || 10000000, navigate);
+                }}
+                className="w-full mt-3 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2"
+              >
+                <RotateCcw className="w-5 h-5" /> Replay This Mission
+              </button>
+            )}
           </motion.div>
         </div>
       )}

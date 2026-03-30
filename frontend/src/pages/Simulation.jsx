@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Activity, DollarSign, Users, AlertTriangle, ArrowRight, XCircle, RotateCcw, PenTool, CheckCircle2, Loader2 } from 'lucide-react';
+import { Heart, Activity, DollarSign, Users, AlertTriangle, ArrowRight, XCircle, RotateCcw, PenTool, CheckCircle2, Loader2, Undo2 } from 'lucide-react';
 import { useSimulation } from '../context/SimulationContext';
 
 const StatCard = ({ icon: Icon, label, value, colorClass, isPercentage = false, currencyScale = 1 }) => {
@@ -35,7 +35,9 @@ const Simulation = () => {
     failureReason, 
     restartSimulation,
     activeMessage,
-    postGameFeedback
+    postGameFeedback,
+    rewindsLeft,
+    backtrack
   } = useSimulation();
 
   const [customActionText, setCustomActionText] = useState("");
@@ -46,7 +48,7 @@ const Simulation = () => {
     return <Navigate to="/dashboard" />;
   }
 
-  // Handle Loading State blocking UI when the AI is processing the string
+  // Handle Loading State when AI is processing custom action
   if (activeMessage && activeMessage.includes("calculating")) {
     return (
       <div className="w-full max-w-lg flex flex-col items-center justify-center p-12 text-center h-screen">
@@ -57,6 +59,7 @@ const Simulation = () => {
     );
   }
 
+  // Handle AI Generating Feedback
   if (gameStatus === "analyzing_feedback") {
     return (
       <div className="w-full max-w-lg flex flex-col items-center justify-center p-12 text-center h-[80vh] mx-auto">
@@ -230,6 +233,27 @@ const Simulation = () => {
                />
              </div>
           </div>
+
+          {/* ⏪ Rewind Button */}
+          <div className="mt-6 pt-6 border-t border-slate-800">
+            <button
+              onClick={backtrack}
+              disabled={rewindsLeft <= 0 || currentStepIndex === 0}
+              className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm border transition-all
+                ${rewindsLeft > 0 && currentStepIndex > 0
+                  ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 hover:bg-amber-500/20 hover:border-amber-400 cursor-pointer'
+                  : 'bg-slate-800/30 border-slate-700/30 text-slate-600 cursor-not-allowed opacity-40'
+                }`}
+              title={rewindsLeft <= 0 ? 'No rewinds remaining' : 'Undo your last decision'}
+            >
+              <Undo2 className="w-4 h-4" />
+              Rewind Decision
+            </button>
+            <p className="text-center text-xs text-slate-500 mt-2 font-mono">
+              {rewindsLeft} / 2 rewinds left
+            </p>
+          </div>
+
         </div>
       </div>
 
