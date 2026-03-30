@@ -65,7 +65,7 @@ const SimulationSetup = () => {
           </div>
         </motion.div>
         <h2 className="text-3xl font-bold mb-4 text-white">Synthesizing Mission...</h2>
-        <p className="text-slate-400 text-lg">CodeNynx AI is dynamically generating a specialized 5-step interactive entrepreneurship scenario matching your exact prompt.</p>
+        <p className="text-slate-400 text-lg">MindSpring AI is dynamically generating a specialized 5-step interactive entrepreneurship scenario matching your exact prompt.</p>
         <p className="text-indigo-400 text-sm mt-8 opacity-80 uppercase tracking-widest">(Building consequence matrices)</p>
       </div>
     );
@@ -118,7 +118,7 @@ const SimulationSetup = () => {
               <div className="flex justify-center mt-6">
                 <div className="glass-panel-light p-4 rounded-xl max-w-xl text-center flex items-center gap-3">
                    <Sparkles className="w-8 h-8 text-yellow-400 shrink-0" />
-                   <p className="text-sm text-slate-300">CodeNynx AI will mathematically structure your mission into deeply responsive gameplay scenarios, options, and branching feedback loops.</p>
+                   <p className="text-sm text-slate-300">MindSpring AI will mathematically structure your mission into deeply responsive gameplay scenarios, options, and branching feedback loops.</p>
                 </div>
               </div>
               

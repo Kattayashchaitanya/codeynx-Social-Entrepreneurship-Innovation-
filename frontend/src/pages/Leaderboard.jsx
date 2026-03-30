@@ -60,7 +60,7 @@ const Leaderboard = () => {
           <h1 className="text-3xl font-bold flex items-center gap-3 text-white">
             Global Rankings <Trophy className="w-6 h-6 text-yellow-400" />
           </h1>
-          <p className="text-slate-400 mt-1">Top social entrepreneurs in the CodeNynx simulation.</p>
+          <p className="text-slate-400 mt-1">Top social entrepreneurs in the MindSpring simulation.</p>
         </div>
       </div>
 
@@ -125,10 +125,19 @@ const Leaderboard = () => {
                 <div className="col-span-1 flex justify-center items-center">
                    {lead.playerEmail ? (
                      <a 
-                       href={`mailto:${lead.playerEmail}?subject=${encodeURIComponent(`CodeNynx Synergy: Connecting Re: ${lead.mission}`)}`} 
+                       href={`mailto:${lead.playerEmail}?subject=${encodeURIComponent(`MindSpring Synergy: Connecting Re: ${lead.mission}`)}`} 
                        onClick={() => {
-                         navigator.clipboard.writeText(lead.playerEmail);
-                         alert(`Email copied to clipboard: ${lead.playerEmail}`);
+                         try {
+                           if (navigator.clipboard) {
+                             navigator.clipboard.writeText(lead.playerEmail);
+                             alert(`Email securely copied: ${lead.playerEmail}`);
+                           } else {
+                             // Fallback if testing on an insecure network (like a Local IP instead of localhost)
+                             alert(`Attempting to open Email Client for: ${lead.playerEmail}`);
+                           }
+                         } catch (err) {
+                           console.error(err);
+                         }
                        }}
                        className="relative z-20 p-2 rounded-xl bg-slate-800 border border-slate-700 hover:bg-indigo-600 hover:text-white hover:border-indigo-500 text-slate-400 transition-all shadow-lg"
                        title="Email Player (Copies to Clipboard)"

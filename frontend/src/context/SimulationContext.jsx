@@ -33,6 +33,7 @@ export const SimulationProvider = ({ children }) => {
 
   // UI State
   const [activeMessage, setActiveMessage] = useState(null);
+  const [postGameFeedback, setPostGameFeedback] = useState(null);
 
   // Initialization (Now Async because we query the local backend!)
   const startSimulation = async (missionText, selectedStakeholders, startingBudget) => {
@@ -72,6 +73,7 @@ export const SimulationProvider = ({ children }) => {
       setGameStatus("playing");
       setFailureReason("");
       setActiveMessage(null);
+      setPostGameFeedback(null);
 
     } catch (error) {
       console.error(error);
@@ -128,9 +130,38 @@ export const SimulationProvider = ({ children }) => {
   }, [stats, gameStatus]);
 
   const failSimulation = (reason) => {
-    setFailureReason(reason);
-    setGameStatus("failure");
-    saveRunToFirebase(false, reason);
+    finishSimulation(false, reason);
+  };
+
+  const finishSimulation = async (isSuccess, finalReason) => {
+    setGameStatus("analyzing_feedback");
+    setFailureReason(finalReason || "");
+
+    try {
+      const response = await fetch("http://localhost:8080/api/generate-feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          missionText: currentScenario?.title || "Custom Mission",
+          decisions: decisions.map(d => ({ step: d.step, text: d.option.text })),
+          finalStats: stats,
+          isSuccess
+        })
+      });
+
+      if (response.ok) {
+        const feedbackData = await response.json();
+        setPostGameFeedback(feedbackData);
+      } else {
+        console.warn("Feedback generation failed passively. Continuing to run end sequence.");
+      }
+    } catch (err) {
+      console.error("Feedback fetch exception:", err);
+    }
+
+    // Now officially end the game and let the UI render the final stats + feedback!
+    setGameStatus(isSuccess ? "success" : "failure");
+    saveRunToFirebase(isSuccess, finalReason);
   };
 
   // Processing a Decision
@@ -200,8 +231,7 @@ export const SimulationProvider = ({ children }) => {
     
     // Check if we reached the end
     if (nextIndex >= currentScenario.steps.length) {
-      setGameStatus("success");
-      saveRunToFirebase(true, null);
+      finishSimulation(true, null);
       return;
     }
 
@@ -272,6 +302,7 @@ export const SimulationProvider = ({ children }) => {
         gameStatus,
         failureReason,
         activeMessage,
+        postGameFeedback,
         executeCustomAction,
         startSimulation,
         makeDecision,

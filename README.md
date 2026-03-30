@@ -30,11 +30,12 @@ Mind Spring is an **interactive platform** designed to help users learn social e
 
 ##  How It Works
  User → Scenario → Decision → Score → Outcome
+
 ---
 
 ## Tech Stack
-- **Frontend:** HTML, CSS, JavaScript  
-- **Backend:** Node.js  
+- **Frontend:** React, HTML, Tailwind CSS, JavaScript  
+- **Backend:** Node.js, Express, Firebase, Google Gemini 2.5 Flash API  
 
 ---
 
@@ -43,5 +44,3 @@ Mind Spring is an **interactive platform** designed to help users learn social e
 - Improve AI-generated insights  
 - Enhanced leaderboard system  
 - Visual guides for troubleshooting and decision-making  
-
----

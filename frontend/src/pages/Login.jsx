@@ -84,7 +84,7 @@ const Login = () => {
         
         <div className="text-center mb-8 text-white relative z-10">
           <h1 className="text-4xl font-bold tracking-tight mb-2 flex items-center justify-center gap-2">
-            Code<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">Nynx</span> <Sparkles className="w-6 h-6 text-yellow-400" />
+            Mind<span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-cyan-400">Spring</span> <Sparkles className="w-6 h-6 text-yellow-400" />
           </h1>
           <p className="text-slate-400 text-sm">Reflective Social Entrepreneurship</p>
         </div>
@@ -130,7 +130,7 @@ const Login = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-slate-900/50 border border-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-4 py-3 outline-none transition-all placeholder:text-slate-600 shadow-inner"
-              placeholder="leader@codenynx.app"
+              placeholder="leader@mindspring.app"
               required
             />
           </div>

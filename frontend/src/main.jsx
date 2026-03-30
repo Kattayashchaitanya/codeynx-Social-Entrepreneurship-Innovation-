@@ -8,3 +8,6 @@ createRoot(document.getElementById('root')).render(
     <App />
   </StrictMode>,
 )
+
+// Forcefully pushing this comment to trigger Vite Global HMR Invalidation.
+console.log("DOM Hard Reset Triggered By AI.");

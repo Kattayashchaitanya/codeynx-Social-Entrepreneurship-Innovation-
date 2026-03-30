@@ -13,7 +13,7 @@ app.use(express.json());
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
 app.get('/api/health', (req, res) => {
-  res.status(200).json({ status: 'ok', message: 'CodeNynx API is running smoothly.' });
+  res.status(200).json({ status: 'ok', message: 'MindSpring API is running smoothly.' });
 });
 
 app.post('/api/generate-scenario', async (req, res) => {
@@ -31,17 +31,17 @@ app.post('/api/generate-scenario', async (req, res) => {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `
-You are the AI engine for 'CodeNynx', a Reflective Social Entrepreneurship Simulation Game.
+You are the AI engine for 'MindSpring', a Reflective Social Entrepreneurship Simulation Game.
 The user has provided the following mission and parameters:
 Mission: "${missionText}"
 Stakeholders: ${stakeholders.join(', ')}
 Starting Budget: ₹${Number(budget).toLocaleString()} (Do not use this for flat subtraction, use percentages).
 
-Generate a 5-step interactive narrative scenario exactly matching the JSON schema below.
+Generate a dynamic 7-to-10-step interactive narrative scenario exactly matching the JSON schema below.
 CRITICAL RULES:
 1. "budgetPercentage" determines the percentage of the starting budget affected. (e.g., -10 means the player loses 10% of their starting budget; 5 means they gain 5%).
 2. "impact", "risk", and "trust" are flat numbers added/subtracted (e.g., 10, -15).
-3. Delayed Consequences are randomly placed. 'stepToTriggerOn' must be a later step index (2, 3, 4, or 5).
+3. Delayed Consequences are randomly placed. 'stepToTriggerOn' must be a later step index (between 2 and 10).
 4. Return ONLY valid JSON. No markdown backticks, no markdown blocks, just the raw JSON object.
 
 FORMAT:
@@ -75,7 +75,7 @@ FORMAT:
   ]
 }
 
-Ensure there are exactly 5 steps, with 2 or 3 options per step.
+Ensure there are strictly between 7 and 10 steps, with 2 or 3 options per step.
 `;
     
     // Call Gemini!
@@ -156,7 +156,7 @@ app.post('/api/judge-action', async (req, res) => {
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const prompt = `
-You are the AI engine for 'CodeNynx', a Reflective Social Entrepreneurship Simulator.
+You are the AI engine for 'MindSpring', a Reflective Social Entrepreneurship Simulator.
 The player has typed a custom action instead of picking standard choices. You must act as the Game Master and judge the mathematical and narrative consequences of their text.
 
 Mission Scope: "${missionText}"
@@ -175,7 +175,7 @@ Strictly return a minified JSON object exactly matching this schema:
     "trust": [Number between -30 and 40]
   },
   "delayedEffect": null OR {
-    "stepToTriggerOn": [Any number between 2 and 5],
+    "stepToTriggerOn": [Any number between 2 and 10],
     "effect": {
        "impact": [Number], "trust": [Number], "risk": [Number], "budgetPercentage": [Number],
        "message": "[A short sentence describing a future consequence of their custom action]"
@@ -194,6 +194,58 @@ CRITICAL RULE: Return ONLY valid JSON. No markdown blocks.
   } catch (err) {
     console.error("AI Judging Error: ", err);
     res.status(500).json({ error: `Google API Error judging choice: ${err.message}` });
+  }
+});
+
+app.post('/api/generate-feedback', async (req, res) => {
+  try {
+    const { missionText, decisions, finalStats, isSuccess } = req.body;
+
+    if (!decisions) return res.status(400).json({ error: "decisions array is required" });
+
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+
+    const prompt = `
+You are the AI Game Master for 'MindSpring', a Social Entrepreneurship Simulator.
+The player just finished their mission. You must analyze their decisions and generate an After Action Report.
+
+Mission Scope: "${missionText}"
+Did they succeed?: ${isSuccess ? 'Yes' : 'No'}
+Final Stats - Impact: ${finalStats.impact}, Risk: ${finalStats.risk}%, Trust: ${finalStats.trust}%, Remaining Budget: ${finalStats.budget}
+Timeline of Decisions Made:
+${JSON.stringify(decisions, null, 2)}
+
+Provide a deeply insightful, brutally honest breakdown of their performance.
+Strictly return a JSON object exactly matching this schema:
+{
+  "summary": "[A 2-3 sentence overarching summary of how their leadership steered the mission]",
+  "strengths": ["[Strength 1 based on a specific good choice they made]", "[Strength 2]"],
+  "mistakes": ["[Mistake 1 based on a specific poor/risky choice they made]", "[Mistake 2]"],
+  "societalImpact": "[A vivid 2-3 sentence description of what the local society looks like now as a direct result of their actions]"
+}
+CRITICAL RULE: Return ONLY valid JSON. No markdown backticks.
+`;
+    
+    let parsedData;
+    try {
+      const result = await model.generateContent(prompt);
+      let output = result.response.text();
+      output = output.replace(/^```json\n?/, '').replace(/\n?```$/, '').trim();
+      parsedData = JSON.parse(output);
+    } catch (aiError) {
+      console.warn("AI Feedback Failed. Defaulting to procedural fallback.");
+      parsedData = {
+        summary: "Your executive leadership steered the initiative through its critical phases.",
+        strengths: ["You made definitive choices under pressure.", "You tracked your remaining resources closely during the crisis."],
+        mistakes: ["Certain critical stakeholders felt alienated by fast pivots.", "Budgeting could have been much more efficiently optimized over the long term."],
+        societalImpact: "The local community has definitively changed. While the outcome was chaotic, the baseline data indicates that your footprint is undeniable!"
+      };
+    }
+    
+    res.status(200).json(parsedData);
+  } catch (err) {
+    console.error("AI Feedback Processing Error: ", err);
+    res.status(500).json({ error: `Google API Feedback Error: ${err.message}` });
   }
 });
 
