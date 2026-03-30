@@ -46,7 +46,7 @@
   <h1>Mind Spring</h1>
 
   <div class="section">
-    <h2>🧠 About</h2>
+    <h2>About</h2>
     <p>
       Mind Spring is an interactive platform designed to help users learn 
       social entrepreneurship through real-world startup simulations.
@@ -71,7 +71,7 @@
   </div>
 
   <div class="section">
-    <h2>🎮 Features</h2>
+    <h2>Features</h2>
     <ul>
       <li>Scenario-based gameplay</li>
       <li>AI-generated situations</li>
