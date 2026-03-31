@@ -5,9 +5,19 @@
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #0f172a; /* Slate 900 as base background for premium dark mode */
+  /* CODENYNX Cyber Palette */
+  --bg-deep: #06060e;
+  --bg-sidebar: #090915;
+  --neon-cyan: #00f2ff;
+  --neon-purple: #bc13fe;
+  --neon-green: #00ff41;
+  --neon-red: #ff3131;
+  --glass-white: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
+
+  color-scheme: dark;
+  color: #e2e8f0;
+  background-color: var(--bg-deep);
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -17,29 +27,102 @@
 
 body {
   margin: 0;
-  min-width: 320px;
   min-height: 100vh;
-  background-color: #0f172a;
+  background-color: var(--bg-deep);
+  overflow-x: hidden;
 }
 
-/* Glassmorphism utility */
-.glass-panel {
-  background: rgba(30, 41, 59, 0.7); /* Slate 800 with opacity */
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+/* 🧊 Tactical Glassmorphism */
+.tactical-panel {
+  background: rgba(13, 13, 27, 0.7);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.8);
 }
 
-.glass-panel-light {
-  background: rgba(255, 255, 255, 0.05);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
+.cyan-glow-border {
+  border: 1px solid rgba(0, 242, 255, 0.3);
+  box-shadow: 0 0 15px rgba(0, 242, 255, 0.1);
 }
 
-.gradient-text {
-  background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+.purple-glow-border {
+  border: 1px solid rgba(188, 19, 254, 0.3);
+  box-shadow: 0 0 15px rgba(188, 19, 254, 0.1);
+}
+
+/* ⚡ Cyber Buttons */
+.cyber-button {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  background: var(--glass-white);
+  border: 1px solid var(--glass-border);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+}
+
+.cyber-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+  transform: translateY(-2px);
+}
+
+.cyber-button-primary {
+  background: linear-gradient(135deg, #bc13fe 0%, #7d12ff 100%);
+  border: none;
+  color: white;
+}
+
+.cyber-button-primary:hover {
+  box-shadow: 0 0 30px rgba(188, 19, 254, 0.4);
+}
+
+/* 📊 Segmented Progress Bars */
+.segmented-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+}
+
+.segment {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 1px;
+  transition: all 0.5s ease;
+}
+
+.segment.active-cyan { background: var(--neon-cyan); box-shadow: 0 0 10px var(--neon-cyan); }
+.segment.active-purple { background: var(--neon-purple); box-shadow: 0 0 10px var(--neon-purple); }
+.segment.active-green { background: var(--neon-green); box-shadow: 0 0 10px var(--neon-green); }
+
+/* 🖋️ Typography */
+.tactical-title {
+  text-transform: uppercase;
+  letter-spacing: 0.2em;
+  font-weight: 900;
+  color: white;
+}
+
+.data-font {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+/* 🎞️ Animations */
+@keyframes scanning {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.scan-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(to bottom, transparent, var(--neon-cyan), transparent);
+  animation: scanning 3s infinite linear;
+  opacity: 0.3;
+  pointer-events: none;
 }
