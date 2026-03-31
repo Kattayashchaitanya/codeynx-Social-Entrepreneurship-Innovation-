@@ -25,6 +25,13 @@ export const SimulationProvider = ({ children }) => {
   const [decisions, setDecisions] = useState([]);
   const [delayedEffectsQueue, setDelayedEffectsQueue] = useState([]);
   
+  // ─── ADVANCED STATE ────────────────────────────────────────────────
+  const [confidenceLog, setConfidenceLog] = useState([]);
+  const [currentCrisis, setCurrentCrisis] = useState(null);
+  const [showReactions, setShowReactions] = useState(false);
+  const [lastReactions, setLastReactions] = useState(null);
+  // ──────────────────────────────────────────────────────────────────
+
   // Game Status: 'setup', 'generating', 'playing', 'analyzing_feedback', 'success', 'failure'
   const [gameStatus, setGameStatus] = useState("setup");
   const [failureReason, setFailureReason] = useState("");
@@ -39,7 +46,7 @@ export const SimulationProvider = ({ children }) => {
   // ─── BACKTRACKING STATE ────────────────────────────────────────────
   const MAX_REWINDS = 2;
   const [rewindsLeft, setRewindsLeft] = useState(MAX_REWINDS);
-  // Stack of snapshots: each entry is { stepIndex, stats, decisions, delayedEffectsQueue }
+  // Stack of snapshots: each entry is { stepIndex, stats, decisions, delayedEffectsQueue, confidenceLog }
   const [snapshotHistory, setSnapshotHistory] = useState([]);
   // ──────────────────────────────────────────────────────────────────
 
@@ -76,6 +83,7 @@ export const SimulationProvider = ({ children }) => {
       
       setCurrentStepIndex(0);
       setDecisions([]);
+      setConfidenceLog([]);
       setDelayedEffectsQueue([]);
       setGameStatus("playing");
       setFailureReason("");
@@ -83,6 +91,9 @@ export const SimulationProvider = ({ children }) => {
       setPostGameFeedback(null);
       setRewindsLeft(MAX_REWINDS);
       setSnapshotHistory([]);
+      setCurrentCrisis(null);
+      setShowReactions(false);
+      setLastReactions(null);
 
     } catch (error) {
       console.error(error);
@@ -101,6 +112,7 @@ export const SimulationProvider = ({ children }) => {
     });
     setCurrentStepIndex(0);
     setDecisions([]);
+    setConfidenceLog([]);
     setDelayedEffectsQueue([]);
     setGameStatus("playing");
     setFailureReason("");
@@ -108,6 +120,9 @@ export const SimulationProvider = ({ children }) => {
     setPostGameFeedback(null);
     setRewindsLeft(MAX_REWINDS);
     setSnapshotHistory([]);
+    setCurrentCrisis(null);
+    setShowReactions(false);
+    setLastReactions(null);
     navigate("/simulation");
   };
   // ──────────────────────────────────────────────────────────────────
@@ -120,10 +135,13 @@ export const SimulationProvider = ({ children }) => {
     setCurrentStepIndex(lastSnapshot.stepIndex);
     setStats(lastSnapshot.stats);
     setDecisions(lastSnapshot.decisions);
+    setConfidenceLog(lastSnapshot.confidenceLog || []);
     setDelayedEffectsQueue(lastSnapshot.delayedEffectsQueue);
     setSnapshotHistory(prev => prev.slice(0, -1));
     setRewindsLeft(prev => prev - 1);
     setActiveMessage(null);
+    setShowReactions(false);
+    setLastReactions(null);
   };
   // ──────────────────────────────────────────────────────────────────
 
@@ -134,7 +152,7 @@ export const SimulationProvider = ({ children }) => {
     return Math.max(0, Math.round(score));
   };
 
-  const saveRunToFirebase = async (isSuccess, finalReason, finalStats, finalDecisions) => {
+  const saveRunToFirebase = async (isSuccess, finalReason, finalStats, finalDecisions, finalConfidence) => {
     try {
       const user = auth.currentUser;
       if (!user) return;
@@ -146,11 +164,10 @@ export const SimulationProvider = ({ children }) => {
         playerName: user.displayName || "Unknown Entrepreneur",
         playerEmail: user.email || null,
         mission: currentScenario?.title || "Custom Mission",
-        // Save full scenario JSON for Replay feature
         scenarioSnapshot: currentScenario || null,
         initialBudget: initialBudget || 0,
-        // Save decision history for After Action Report
         decisionLog: (finalDecisions || []).map(d => ({ step: d.step, text: d.option?.text || d.text || "" })),
+        confidenceLog: finalConfidence || [],
         score: finalScore,
         impact: finalStats.impact,
         risk: Math.round(finalStats.risk),
@@ -160,7 +177,7 @@ export const SimulationProvider = ({ children }) => {
         failureReason: finalReason || null,
         timestamp: serverTimestamp()
       });
-      console.log("Run saved to Global Leaderboard with full replay data!");
+      console.log("Run saved to Global Leaderboard!");
     } catch (err) {
       console.error("Failed to save run to Firebase:", err);
     }
@@ -183,12 +200,10 @@ export const SimulationProvider = ({ children }) => {
     finishSimulation(false, reason);
   };
 
-  // We capture the current stats/decisions synchronously at invocation time
-  // because React state may not have flushed yet when the async function runs.
   const finishSimulation = async (isSuccess, finalReason) => {
-    // Snapshot current values immediately before any state updates
     const snapStats = { ...stats };
     const snapDecisions = [...decisions];
+    const snapConfidence = [...confidenceLog];
 
     setGameStatus("analyzing_feedback");
     setFailureReason(finalReason || "");
@@ -200,6 +215,7 @@ export const SimulationProvider = ({ children }) => {
         body: JSON.stringify({
           missionText: currentScenario?.title || "Custom Mission",
           decisions: snapDecisions.map(d => ({ step: d.step, text: d.option?.text || "" })),
+          confidenceLog: snapConfidence,
           finalStats: snapStats,
           isSuccess
         })
@@ -216,24 +232,37 @@ export const SimulationProvider = ({ children }) => {
     }
 
     setGameStatus(isSuccess ? "success" : "failure");
-    saveRunToFirebase(isSuccess, finalReason, snapStats, snapDecisions);
+    saveRunToFirebase(isSuccess, finalReason, snapStats, snapDecisions, snapConfidence);
   };
 
-  // Processing a Decision — pushes snapshot FIRST for undo support
-  const makeDecision = (option) => {
-    // 1. Push current state snapshot onto history stack before mutating
+  // ─── THE CORE DECISION LOOP ─────────────────────────────────────────
+
+  // Phase 1: Capture Decision (immediate stats, show reactions)
+  const makeDecision = (option, confidence) => {
+    // 1. Snapshot for backtrack
     setSnapshotHistory(prev => [
       ...prev,
       {
         stepIndex: currentStepIndex,
         stats: { ...stats },
         decisions: [...decisions],
+        confidenceLog: [...confidenceLog],
         delayedEffectsQueue: [...delayedEffectsQueue],
       }
     ]);
 
-    // 2. Record Decision
-    setDecisions(prev => [...prev, { step: currentStepIndex, option }]);
+    // 2. Record Decision & Confidence
+    setDecisions(prev => [...prev, { 
+      step: currentStepIndex, 
+      option,
+      actionText: option.text,
+      allOptions: currentScenario.steps[currentStepIndex].options, // for WhatIfExplorer
+      statsAtTime: { ...stats } // for charts
+    }]);
+
+    if (confidence) {
+      setConfidenceLog(prev => [...prev, { step: currentStepIndex, level: confidence }]);
+    }
 
     // 3. Apply Immediate Effects
     setStats((prev) => {
@@ -254,50 +283,51 @@ export const SimulationProvider = ({ children }) => {
       setDelayedEffectsQueue(prev => [...prev, option.delayedEffect]);
     }
 
-    // 5. Move to next step
-    advanceStep();
+    // 5. Show Reactions Phase
+    setLastReactions(option.stakeholderReactions || null);
+    setShowReactions(true);
   };
 
-  const executeCustomAction = async (customText, currentQuestion) => {
-    setActiveMessage("The AI Game Master is currently calculating the mathematical impact of your custom decision...");
-    
-    try {
-      const response = await fetch("http://localhost:8080/api/judge-action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          missionText: currentScenario.title || "Custom Mission",
-          currentQuestion,
-          userAction: customText
-        })
-      });
-
-      if (!response.ok) {
-        const errPayload = await response.json();
-        throw new Error(errPayload.error || "AI Judging failed.");
-      }
-
-      const generatedOption = await response.json();
-      setActiveMessage(null);
-      makeDecision(generatedOption);
-
-    } catch (error) {
-      console.error(error);
-      alert(`AI Judge Disabled: ${error.message}`);
-      setActiveMessage(null);
-    }
+  // Phase 2: Confirm Transition to next step
+  const confirmReaction = () => {
+    setShowReactions(false);
+    advanceStep();
   };
 
   const advanceStep = () => {
     const nextIndex = currentStepIndex + 1;
     
+    // Check if end of simulation
     if (nextIndex >= currentScenario.steps.length) {
       finishSimulation(true, null);
       return;
     }
 
+    // Move to next step
     setCurrentStepIndex(nextIndex);
 
+    // Check for Crisis Injection in the incoming step root
+    const incomingStep = currentScenario.steps[nextIndex];
+    if (incomingStep.crisisEvent) {
+       setCurrentCrisis(incomingStep.crisisEvent);
+       
+       // Apply Crisis Effects immediately
+       const ce = incomingStep.crisisEvent;
+       setStats(prev => {
+         let budgetMod = ce.effects.budgetPercentage 
+           ? (initialBudget * (ce.effects.budgetPercentage / 100))
+           : (ce.effects.budget || 0);
+
+         return {
+           impact: Math.max(0, prev.impact + (ce.effects.impact || 0)),
+           budget: prev.budget + budgetMod,
+           risk: Math.max(0, prev.risk + (ce.effects.risk || 0)),
+           trust: Math.max(0, Math.min(100, prev.trust + (ce.effects.trust || 0)))
+         };
+       });
+    }
+
+    // Process Delayed Effects
     const triggeredEffects = delayedEffectsQueue.filter(
       (effect) => effect.stepToTriggerOn === nextIndex
     );
@@ -338,12 +368,63 @@ export const SimulationProvider = ({ children }) => {
     }
   };
 
+  // ─── CUSTOM ACTION HANDLER ──────────────────────────────────────────
+  const executeCustomAction = async (customText, currentQuestion) => {
+    setActiveMessage("The AI Game Master is currently calculating the mathematical impact of your custom decision...");
+    
+    try {
+      const response = await fetch("http://localhost:8080/api/judge-action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          missionText: currentScenario.title || "Custom Mission",
+          currentQuestion,
+          userAction: customText
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("AI Judging failed.");
+      }
+
+      const generatedOption = await response.json();
+      setActiveMessage(null);
+      // Custom actions use "Medium" confidence by default
+      makeDecision(generatedOption, "Medium");
+
+    } catch (error) {
+      console.error(error);
+      alert(`AI Judge Disabled: ${error.message}`);
+      setActiveMessage(null);
+    }
+  };
+
+  const dismissCrisis = () => {
+    if (currentCrisis) {
+      setStats(prev => {
+         let budgetMod = currentCrisis.effects.budgetPercentage 
+           ? (initialBudget * (currentCrisis.effects.budgetPercentage / 100))
+           : (currentCrisis.effects.budget || 0);
+
+         return {
+            impact: Math.max(0, prev.impact + (currentCrisis.effects.impact || 0)),
+            budget: prev.budget + budgetMod,
+            risk: Math.max(0, prev.risk + (currentCrisis.effects.risk || 0)),
+            trust: Math.max(0, Math.min(100, prev.trust + (currentCrisis.effects.trust || 0)))
+         };
+      });
+      setCurrentCrisis(null);
+    }
+  };
+
   const dismissMessage = () => setActiveMessage(null);
 
   const restart = () => {
     setGameStatus("setup");
     setSnapshotHistory([]);
     setRewindsLeft(MAX_REWINDS);
+    setCurrentCrisis(null);
+    setShowReactions(false);
   };
 
   return (
@@ -355,17 +436,23 @@ export const SimulationProvider = ({ children }) => {
         stats,
         currentStepIndex,
         decisions,
+        confidenceLog,
         gameStatus,
         failureReason,
         activeMessage,
         postGameFeedback,
         rewindsLeft,
         snapshotHistory,
+        currentCrisis,
+        showReactions,
+        lastReactions,
         backtrack,
         replaySimulation,
         executeCustomAction,
         startSimulation,
         makeDecision,
+        confirmReaction,
+        dismissCrisis,
         dismissMessage,
         restart,
         restartSimulation: restart
@@ -375,3 +462,4 @@ export const SimulationProvider = ({ children }) => {
     </SimulationContext.Provider>
   );
 };
+

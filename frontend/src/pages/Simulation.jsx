@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Heart, Activity, DollarSign, Users, AlertTriangle, ArrowRight, XCircle, RotateCcw, PenTool, CheckCircle2, Loader2, Undo2 } from 'lucide-react';
+import { Heart, Activity, DollarSign, Users, AlertTriangle, ArrowRight, XCircle, RotateCcw, PenTool, CheckCircle2, Loader2, Undo2, Download } from 'lucide-react';
 import { useSimulation } from '../context/SimulationContext';
+
+// Advanced Components
+import ConfidenceMeter from '../components/ConfidenceMeter';
+import StakeholderReactions from '../components/StakeholderReactions';
+import CrisisEventModal from '../components/CrisisEventModal';
+import BudgetBurnWarning from '../components/BudgetBurnWarning';
+import PerformanceCharts from '../components/PerformanceCharts';
+import WhatIfExplorer from '../components/WhatIfExplorer';
+import GovernmentPolicyCard from '../components/GovernmentPolicyCard';
 
 const StatCard = ({ icon: Icon, label, value, colorClass, isPercentage = false, currencyScale = 1 }) => {
   const displayValue = isPercentage 
@@ -30,6 +39,7 @@ const Simulation = () => {
     stats, 
     currentStepIndex,
     makeDecision,
+    confirmReaction,
     executeCustomAction, 
     gameStatus, 
     failureReason, 
@@ -37,16 +47,76 @@ const Simulation = () => {
     activeMessage,
     postGameFeedback,
     rewindsLeft,
-    backtrack
+    backtrack,
+    currentCrisis,
+    dismissCrisis,
+    showReactions,
+    lastReactions,
+    decisions,
+    initialBudget
   } = useSimulation();
 
   const [customActionText, setCustomActionText] = useState("");
   const [isTypingCustom, setIsTypingCustom] = useState(false);
+  
+  // Local state for the 2-step decision confirmation
+  const [stashedOption, setStashedOption] = useState(null);
+  const [isPickingConfidence, setIsPickingConfidence] = useState(false);
 
   // Protected Route Check
   if (!currentScenario || gameStatus === "setup") {
     return <Navigate to="/dashboard" />;
   }
+
+  // AI Report Generator (for download)
+  const handleDownloadReport = () => {
+    if (!postGameFeedback) return;
+    const report = `
+MINDSPRING — AI AFTER ACTION REPORT
+====================================
+Mission: ${currentScenario.title}
+Status: ${gameStatus === "success" ? "ACCOMPLISHED" : "FAILED"}
+Final Stats: Impact: ${stats.impact}, Risk: ${stats.risk}%, Trust: ${stats.trust}%, Budget: ₹${stats.budget.toLocaleString()}
+
+EXECUTIVE SUMMARY
+-----------------
+${postGameFeedback.summary}
+
+KEY STRENGTHS
+-------------
+${postGameFeedback.strengths.join("\n")}
+
+CRITICAL MISTAKES
+-----------------
+${postGameFeedback.mistakes.join("\n")}
+
+SOCIETAL IMPACT
+---------------
+${postGameFeedback.societalImpact}
+
+DECISION HISTORY
+----------------
+${decisions.map((d, i) => `Step ${i + 1}: ${d.text || d.option?.text}`).join("\n")}
+    `.trim();
+
+    const element = document.createElement("a");
+    const file = new Blob([report], { type: 'text/plain' });
+    element.href = URL.createObjectURL(file);
+    element.download = `MindSpring_Report_${new Date().getTime()}.txt`;
+    document.body.appendChild(element);
+    element.click();
+  };
+
+  const onOptionClick = (opt) => {
+    setStashedOption(opt);
+    setIsPickingConfidence(true);
+  };
+
+  const onConfidenceConfirm = (level) => {
+    makeDecision(stashedOption, level);
+    setStashedOption(null);
+    setIsPickingConfidence(false);
+  };
 
   // Handle Loading State when AI is processing custom action
   if (activeMessage && activeMessage.includes("calculating")) {
@@ -77,7 +147,7 @@ const Simulation = () => {
       <motion.div 
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        className="w-full max-w-4xl text-center mx-auto"
+        className="w-full max-w-6xl space-y-12 pb-20 mx-auto"
       >
         <div className={`glass-panel p-12 rounded-3xl border ${isSuccess ? 'border-emerald-500/50 bg-emerald-900/20' : 'border-red-500/50 bg-red-900/20'}`}>
           <div className="flex justify-center mb-6">
@@ -96,7 +166,7 @@ const Simulation = () => {
               : failureReason}
           </p>
 
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-10 text-center">
             <div className="bg-slate-800/50 p-4 rounded-xl">
               <p className="text-slate-400 text-sm mb-1">Final Impact</p>
               <p className="text-2xl font-bold text-emerald-400">{stats.impact}</p>
@@ -110,71 +180,97 @@ const Simulation = () => {
               <p className="text-2xl font-bold text-blue-400">{stats.trust}%</p>
             </div>
             <div className="bg-slate-800/50 p-4 rounded-xl">
-              <p className="text-slate-400 text-sm mb-1">Remaining Budget</p>
-              <p className="text-xl font-bold text-amber-400 truncate">₹{stats.budget.toLocaleString()}</p>
+              <p className="text-slate-400 text-sm mb-1">Budget Left</p>
+              <p className="text-xl font-bold text-amber-400">₹{stats.budget.toLocaleString()}</p>
             </div>
           </div>
 
-          {/* AI Feedback AAR Panel */}
-          {postGameFeedback && (
-            <motion.div 
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.5 }}
-              className="mt-8 mb-10 text-left space-y-6"
+          <div className="flex flex-col sm:flex-row justify-center gap-4">
+            <button 
+              onClick={restartSimulation}
+              className={`px-8 py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-105 ${isSuccess ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'}`}
             >
-              <div className="bg-slate-900/60 p-6 md:p-8 rounded-3xl border border-slate-700/50 shadow-inner">
-                <h3 className="font-bold text-indigo-400 mb-3 uppercase tracking-widest text-sm flex items-center gap-2">
-                  <Activity className="w-4 h-4" /> Executive Summary
-                </h3>
-                <p className="text-slate-200 leading-relaxed text-lg">{postGameFeedback.summary}</p>
-              </div>
+              <RotateCcw className="w-5 h-5" /> Return to Dashboard
+            </button>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-emerald-900/20 p-6 rounded-3xl border border-emerald-500/20">
-                  <h3 className="font-bold text-emerald-400 mb-4 uppercase tracking-widest text-sm flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4" /> Key Strengths
+            {postGameFeedback && (
+              <button 
+                onClick={handleDownloadReport}
+                className="px-8 py-4 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold flex items-center justify-center gap-2 transition-all hover:scale-105 border border-slate-700"
+              >
+                <Download className="w-5 h-5" /> Download Report (.TXT)
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* 📊 Restored Data Analytics Section */}
+        <AnimatePresence>
+          {postGameFeedback && (
+            <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="space-y-12">
+               {/* After Action Report AI Panels */}
+               <div className="mt-8 text-left space-y-6">
+                <div className="bg-slate-900/60 p-6 md:p-8 rounded-3xl border border-slate-700/50 shadow-inner">
+                  <h3 className="font-bold text-indigo-400 mb-3 uppercase tracking-widest text-sm flex items-center gap-2">
+                    <Activity className="w-4 h-4" /> Executive Summary
                   </h3>
-                  <ul className="space-y-3">
-                    {postGameFeedback.strengths.map((s, i) => (
-                      <li key={i} className="text-emerald-100/80 text-sm flex items-start gap-3 leading-relaxed">
-                        <span className="text-emerald-500 mt-1 shrink-0">•</span> {s}
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-slate-200 leading-relaxed text-lg">{postGameFeedback.summary}</p>
                 </div>
 
-                <div className="bg-red-900/20 p-6 rounded-3xl border border-red-500/20">
-                  <h3 className="font-bold text-red-400 mb-4 uppercase tracking-widest text-sm flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4" /> Critical Mistakes
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-emerald-900/20 p-6 rounded-3xl border border-emerald-500/20">
+                    <h3 className="font-bold text-emerald-400 mb-4 uppercase tracking-widest text-sm flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4" /> Key Strengths
+                    </h3>
+                    <ul className="space-y-3">
+                      {postGameFeedback.strengths.map((s, i) => (
+                        <li key={i} className="text-emerald-100/80 text-sm flex items-start gap-3 leading-relaxed">
+                          <span className="text-emerald-500 mt-1 shrink-0">•</span> {s}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="bg-red-900/20 p-6 rounded-3xl border border-red-500/20">
+                    <h3 className="font-bold text-red-400 mb-4 uppercase tracking-widest text-sm flex items-center gap-2">
+                      <AlertTriangle className="w-4 h-4" /> Critical Mistakes
+                    </h3>
+                    <ul className="space-y-3">
+                      {postGameFeedback.mistakes.map((m, i) => (
+                        <li key={i} className="text-red-100/80 text-sm flex items-start gap-3 leading-relaxed">
+                          <span className="text-red-500 mt-1 shrink-0">•</span> {m}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+
+                <div className="bg-indigo-900/20 p-6 md:p-8 rounded-3xl border border-indigo-500/30 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 blur-3xl rounded-full" />
+                  <h3 className="font-bold text-indigo-300 mb-3 uppercase tracking-widest text-sm flex items-center gap-2 relative z-10">
+                    <Users className="w-4 h-4" /> Societal Impact
                   </h3>
-                  <ul className="space-y-3">
-                    {postGameFeedback.mistakes.map((m, i) => (
-                      <li key={i} className="text-red-100/80 text-sm flex items-start gap-3 leading-relaxed">
-                        <span className="text-red-500 mt-1 shrink-0">•</span> {m}
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-slate-200 leading-relaxed text-lg relative z-10">{postGameFeedback.societalImpact}</p>
                 </div>
               </div>
 
-              <div className="bg-indigo-900/20 p-6 md:p-8 rounded-3xl border border-indigo-500/30 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/20 blur-3xl rounded-full" />
-                <h3 className="font-bold text-indigo-300 mb-3 uppercase tracking-widest text-sm flex items-center gap-2 relative z-10">
-                  <Users className="w-4 h-4" /> Societal Impact
-                </h3>
-                <p className="text-slate-200 leading-relaxed text-lg relative z-10">{postGameFeedback.societalImpact}</p>
-              </div>
+              {/* Performance Line Charts */}
+              {(() => {
+                const processedHistory = [
+                  { step: 0, ...currentScenario.startingStats, budget: initialBudget },
+                  ...decisions.map(d => ({
+                    step: d.step + 1,
+                    ...d.statsAtTime
+                  }))
+                ];
+                return <PerformanceCharts stepHistory={processedHistory} />;
+              })()}
+
+              {/* Detailed What-If Branch Explorer */}
+              <WhatIfExplorer decisions={decisions} />
             </motion.div>
           )}
-
-          <button 
-            onClick={restartSimulation}
-            className={`px-8 py-4 rounded-xl font-bold flex items-center gap-2 mx-auto transition-all hover:scale-105 ${isSuccess ? 'bg-emerald-600 hover:bg-emerald-500' : 'bg-red-600 hover:bg-red-500'}`}
-          >
-            <RotateCcw className="w-5 h-5" /> Return to Dashboard
-          </button>
-        </div>
+        </AnimatePresence>
       </motion.div>
     );
   }
@@ -189,9 +285,15 @@ const Simulation = () => {
   };
 
   return (
-    <div className="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-8 relative pb-20">
+    <div className="w-full max-w-7xl grid grid-cols-1 lg:grid-cols-12 gap-8 relative pb-24 mx-auto px-4">
       
-      {/* 🟢 Notifications / Delayed Effects Popup */}
+      {/* 🚨 Full-Screen Crisis Modal */}
+      <AnimatePresence>
+        {currentCrisis && (
+          <CrisisEventModal crisis={currentCrisis} onDismiss={dismissCrisis} />
+        )}
+      </AnimatePresence>
+
       <AnimatePresence>
         {activeMessage && (
           <motion.div 
@@ -215,10 +317,12 @@ const Simulation = () => {
           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-6">Live Dashboard</h3>
           <div className="space-y-4">
             <StatCard icon={Activity} label="Impact" value={stats.impact} colorClass="text-emerald-400" />
-            <StatCard icon={DollarSign} label="Budget" value={stats.budget} colorClass="text-amber-400" currencyScale={10} />
+            <StatCard icon={DollarSign} label="Budget" value={stats.budget} colorClass={stats.budget < (initialBudget * 0.2) ? 'text-red-500' : 'text-amber-400'} currencyScale={10} />
             <StatCard icon={AlertTriangle} label="Risk" value={stats.risk} isPercentage={true} colorClass={stats.risk > 70 ? 'text-red-500' : 'text-orange-400'} />
             <StatCard icon={Users} label="Trust" value={stats.trust} isPercentage={true} colorClass="text-blue-400" />
           </div>
+
+          <BudgetBurnWarning currentBudget={stats.budget} initialBudget={initialBudget} />
           
           <div className="mt-8 pt-6 border-t border-slate-800">
              <div className="flex justify-between items-center mb-2">
@@ -234,17 +338,15 @@ const Simulation = () => {
              </div>
           </div>
 
-          {/* ⏪ Rewind Button */}
           <div className="mt-6 pt-6 border-t border-slate-800">
             <button
               onClick={backtrack}
-              disabled={rewindsLeft <= 0 || currentStepIndex === 0}
+              disabled={rewindsLeft <= 0 || currentStepIndex === 0 || showReactions}
               className={`w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-bold text-sm border transition-all
-                ${rewindsLeft > 0 && currentStepIndex > 0
+                ${rewindsLeft > 0 && currentStepIndex > 0 && !showReactions
                   ? 'bg-amber-500/10 border-amber-500/40 text-amber-400 hover:bg-amber-500/20 hover:border-amber-400 cursor-pointer'
                   : 'bg-slate-800/30 border-slate-700/30 text-slate-600 cursor-not-allowed opacity-40'
                 }`}
-              title={rewindsLeft <= 0 ? 'No rewinds remaining' : 'Undo your last decision'}
             >
               <Undo2 className="w-4 h-4" />
               Rewind Decision
@@ -253,7 +355,6 @@ const Simulation = () => {
               {rewindsLeft} / 2 rewinds left
             </p>
           </div>
-
         </div>
       </div>
 
@@ -267,78 +368,96 @@ const Simulation = () => {
         >
           {/* Mission Context */}
           <div className="bg-slate-800/40 rounded-2xl p-6 mb-10 border border-slate-700/50">
-             <h2 className="text-indigo-400 font-bold uppercase tracking-widest text-sm mb-2">Current Mission</h2>
+             <h2 className="text-indigo-400 font-bold uppercase tracking-widest text-sm mb-1">Current Mission</h2>
              <p className="text-lg text-slate-300">{currentScenario.title}</p>
           </div>
 
-          <h3 className="text-3xl font-bold mb-10 leading-snug">{currentStep.question}</h3>
+          {/* 🏛️ Government Policy Card (Dynamic) */}
+          <AnimatePresence mode="wait">
+            {currentStep.governmentPolicy && !showReactions && (
+              <GovernmentPolicyCard policy={currentStep.governmentPolicy} />
+            )}
+          </AnimatePresence>
 
-          {!isTypingCustom ? (
-            <div className="space-y-4">
-              {currentStep.options.map((opt) => (
-                <button
-                  key={opt.id}
-                  onClick={() => makeDecision(opt)}
-                  className="w-full text-left p-6 rounded-2xl bg-slate-800/50 hover:bg-indigo-600/20 border border-slate-700 hover:border-indigo-500 transition-all group flex items-start gap-4"
-                >
-                  <div className="p-2 rounded-lg bg-slate-700 group-hover:bg-indigo-500 transition-colors mt-1 shrink-0">
-                    <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-white" />
-                  </div>
-                  <div>
-                    <p className="text-lg font-medium text-slate-200 group-hover:text-white mb-2">{opt.text}</p>
-                  </div>
-                </button>
-              ))}
-
-              <div className="relative py-4 flex items-center">
-                <div className="flex-grow border-t border-slate-700"></div>
-                <span className="flex-shrink-0 mx-4 text-slate-500 text-sm font-bold uppercase tracking-widest">OR</span>
-                <div className="flex-grow border-t border-slate-700"></div>
-              </div>
-
-              <button
-                onClick={() => setIsTypingCustom(true)}
-                className="w-full text-center py-6 px-6 rounded-2xl bg-gradient-to-r from-slate-800 to-slate-900 border border-slate-700 hover:border-teal-500 transition-all group flex justify-center items-center gap-3 relative overflow-hidden"
-              >
-                <div className="absolute inset-0 bg-teal-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <PenTool className="w-5 h-5 text-teal-400 relative z-10" />
-                <span className="font-bold text-teal-300 tracking-wide relative z-10">TAKE CUSTOM ACTION (AI JUDGE)</span>
-              </button>
-            </div>
-          ) : (
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="bg-slate-900/80 rounded-2xl border border-teal-500/50 p-6 shadow-[0_0_30px_rgba(20,184,166,0.15)]"
-            >
-              <div className="mb-4 flex items-center justify-between">
-                <h4 className="font-bold text-teal-400 flex items-center gap-2">
-                  <PenTool className="w-4 h-4" /> Type your unique strategy
-                </h4>
-                <button onClick={() => setIsTypingCustom(false)} className="text-slate-500 hover:text-white text-sm uppercase tracking-wider font-bold">Cancel</button>
-              </div>
-
-              <textarea 
-                autoFocus
-                value={customActionText}
-                onChange={e => setCustomActionText(e.target.value)}
-                placeholder="E.g., I will leverage local radio stations to broadcast our public health data while secretly meeting with the syndicate boss..."
-                className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-4 text-white placeholder:text-slate-600 outline-none focus:border-teal-500/50 h-32 resize-none mb-4"
+          <AnimatePresence mode="wait">
+            {showReactions ? (
+              <StakeholderReactions 
+                reactions={lastReactions} 
+                onContinue={confirmReaction} 
               />
+            ) : isPickingConfidence ? (
+              <ConfidenceMeter 
+                optionText={stashedOption?.text} 
+                onSelect={onConfidenceConfirm} 
+                onCancel={() => {
+                  setStashedOption(null);
+                  setIsPickingConfidence(false);
+                }} 
+              />
+            ) : (
+              <motion.div initial={{ opacity:0 }} animate={{ opacity:1 }}>
+                <h3 className="text-3xl font-bold mb-10 leading-snug">{currentStep.question}</h3>
 
-              <div className="flex justify-between items-center">
-                <span className="text-xs text-slate-500">The AI will mathematically judge the realism and impact of your action.</span>
-                <button 
-                  disabled={customActionText.length < 5}
-                  onClick={handleCustomSubmit}
-                  className="bg-teal-600 disabled:opacity-50 hover:bg-teal-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-colors"
-                >
-                  Submit to Game Master <CheckCircle2 className="w-5 h-5" />
-                </button>
-              </div>
-            </motion.div>
-          )}
+                {!isTypingCustom ? (
+                  <div className="space-y-4">
+                    {currentStep.options.map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => onOptionClick(opt)}
+                        className="w-full text-left p-6 rounded-2xl bg-slate-800/50 hover:bg-white/5 border border-slate-700 hover:border-indigo-500 transition-all group flex items-start gap-4"
+                      >
+                        <div className="p-2 rounded-lg bg-slate-700 group-hover:bg-indigo-500 transition-colors mt-1 shrink-0">
+                          <ArrowRight className="w-5 h-5 text-slate-300 group-hover:text-white" />
+                        </div>
+                        <div>
+                          <p className="text-lg font-medium text-slate-200 group-hover:text-white mb-2">{opt.text}</p>
+                        </div>
+                      </button>
+                    ))}
 
+                    <div className="relative py-4 flex items-center">
+                      <div className="flex-grow border-t border-slate-700"></div>
+                      <span className="flex-shrink-0 mx-4 text-slate-500 text-sm font-bold uppercase tracking-widest">OR</span>
+                      <div className="flex-grow border-t border-slate-700"></div>
+                    </div>
+
+                    <button
+                      onClick={() => setIsTypingCustom(true)}
+                      className="w-full text-center py-6 px-6 rounded-2xl bg-slate-800/20 border border-slate-700/50 hover:border-teal-500/50 transition-all group flex justify-center items-center gap-3"
+                    >
+                      <PenTool className="w-5 h-5 text-teal-400" />
+                      <span className="font-bold text-teal-300 tracking-wide uppercase">Take Custom Action (AI Judge)</span>
+                    </button>
+                  </div>
+                ) : (
+                  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-slate-900/80 rounded-2xl border border-teal-500/50 p-6">
+                    <div className="mb-4 flex items-center justify-between">
+                      <h4 className="font-bold text-teal-400 flex items-center gap-2 capitalize">Type your unique strategy</h4>
+                      <button onClick={() => setIsTypingCustom(false)} className="text-slate-500 hover:text-white text-sm">Cancel</button>
+                    </div>
+
+                    <textarea 
+                      autoFocus
+                      value={customActionText}
+                      onChange={e => setCustomActionText(e.target.value)}
+                      placeholder="Describe your strategy here..."
+                      className="w-full bg-slate-950/50 border border-slate-800 rounded-xl p-4 text-white placeholder:text-slate-600 outline-none focus:border-teal-500/50 h-32 resize-none mb-4"
+                    />
+
+                    <div className="flex justify-end">
+                      <button 
+                        disabled={customActionText.length < 5}
+                        onClick={handleCustomSubmit}
+                        className="bg-teal-600 hover:bg-teal-500 text-white px-8 py-3 rounded-xl font-bold flex items-center gap-2"
+                      >
+                        Submit to AI Master <CheckCircle2 className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </div>
     </div>
