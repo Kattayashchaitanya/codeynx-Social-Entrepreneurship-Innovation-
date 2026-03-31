@@ -1,5 +1,8 @@
-Mind Spring  
+Mind Spring 
+
 ---
+
+
 
 ## About
 Mind Spring is an **interactive platform** designed to help users learn social entrepreneurship through real-world startup simulations.
@@ -19,6 +22,7 @@ Mind Spring is an **interactive platform** designed to help users learn social e
 
 ---
 
+
 ## Features
 - Scenario-based gameplay  
 - AI-generated situations  
@@ -28,16 +32,19 @@ Mind Spring is an **interactive platform** designed to help users learn social e
 
 ---
 
+
 ##  How It Works
  User → Scenario → Decision → Score → Outcome
 
 ---
+
 
 ## Tech Stack
 - **Frontend:** HTML, CSS, JavaScript  
 - **Backend:** Node.js  
 
 ---
+
 
 ## Future Scope
 - Expand scenario library  
